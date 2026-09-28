@@ -1,4 +1,5 @@
 import random
+import tkinter as tk
 
 
 TAILLE = 10
@@ -75,13 +76,101 @@ def afficher_damier(damier: list[list[int]]) -> None:
 		print(" ".join(symboles[case] for case in ligne))
 
 
-damier = creer_damier(TAILLE, DENSITE_ARBRES)
-placer_arbre_malade(damier)
+class ApplicationForet:
+	"""Interface interactive de la simulation."""
 
-print("Etat initial :")
-afficher_damier(damier)
+	COULEURS = {
+		CASE_VIDE: "white",
+		ARBRE_SAIN: "forest green",
+		ARBRE_MALADE: "firebrick",
+	}
 
-damier = propager_maladie(damier)
+	def __init__(self, fenetre: tk.Tk) -> None:
+		self.fenetre = fenetre
+		self.fenetre.title("Propagation d'une maladie dans une foret")
+		self.damier = creer_damier(TAILLE, DENSITE_ARBRES)
+		placer_arbre_malade(self.damier)
+		self.etape = 0
+		self.cases: list[list[tk.Button]] = []
 
-print("\nApres une etape de propagation :")
-afficher_damier(damier)
+		self.titre = tk.Label(fenetre, text="Etape 0", font=("Arial", 16, "bold"))
+		self.titre.pack(pady=(12, 4))
+
+		self.grille = tk.Frame(fenetre)
+		self.grille.pack(padx=12, pady=8)
+		self.construire_grille()
+
+		commandes = tk.Frame(fenetre)
+		commandes.pack(pady=(4, 12))
+		tk_bouton = tk.Button(
+			commandes,
+			text="Etape suivante",
+			command=self.etape_suivante,
+			font=("Arial", 12, "bold"),
+			bg="#d9ead3",
+			padx=12,
+			pady=6,
+		)
+		tk_bouton.pack(side=tk.LEFT, padx=5)
+		tk_reset = tk.Button(
+			commandes,
+			text="Recommencer",
+			command=self.recommencer,
+			font=("Arial", 12),
+			padx=12,
+			pady=6,
+		)
+		tk_reset.pack(side=tk.LEFT, padx=5)
+
+		self.information = tk.Label(
+			fenetre,
+			text="Clique sur un arbre sain pour le rendre malade.",
+			font=("Arial", 10),
+		)
+		self.information.pack(pady=(0, 12))
+
+	def construire_grille(self) -> None:
+		"""Construit les cases cliquables du damier."""
+		for ligne in range(TAILLE):
+			boutons_ligne = []
+			for colonne in range(TAILLE):
+				bouton = tk.Button(
+					self.grille,
+					width=3,
+					height=1,
+					borderwidth=1,
+					command=lambda l=ligne, c=colonne: self.cliquer_case(l, c),
+				)
+				bouton.grid(row=ligne, column=colonne)
+				boutons_ligne.append(bouton)
+			self.cases.append(boutons_ligne)
+		self.actualiser_grille()
+
+	def actualiser_grille(self) -> None:
+		for ligne in range(TAILLE):
+			for colonne in range(TAILLE):
+				etat = self.damier[ligne][colonne]
+				self.cases[ligne][colonne].configure(bg=self.COULEURS[etat], activebackground=self.COULEURS[etat])
+
+	def cliquer_case(self, ligne: int, colonne: int) -> None:
+		if self.damier[ligne][colonne] == ARBRE_SAIN:
+			self.damier[ligne][colonne] = ARBRE_MALADE
+			self.actualiser_grille()
+
+	def etape_suivante(self) -> None:
+		self.damier = propager_maladie(self.damier)
+		self.etape += 1
+		self.titre.configure(text=f"Etape {self.etape}")
+		self.actualiser_grille()
+
+	def recommencer(self) -> None:
+		self.damier = creer_damier(TAILLE, DENSITE_ARBRES)
+		placer_arbre_malade(self.damier)
+		self.etape = 0
+		self.titre.configure(text="Etape 0")
+		self.actualiser_grille()
+
+
+fenetre = tk.Tk()
+application = ApplicationForet(fenetre)
+fenetre.mainloop()
