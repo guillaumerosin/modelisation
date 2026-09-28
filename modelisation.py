@@ -8,6 +8,8 @@ DENSITE_ARBRES = 0.8
 CASE_VIDE = 0
 ARBRE_SAIN = 1
 ARBRE_MALADE = 2
+RIVIERE = 3
+ROCHER = 4
 
 
 def creer_damier(taille: int, densite: float) -> list[list[int]]:
@@ -26,18 +28,23 @@ def creer_damier(taille: int, densite: float) -> list[list[int]]:
 	return damier
 
 
-def placer_arbre_malade(damier: list[list[int]]) -> None:
-	"""Transforme un arbre sain choisi au hasard en arbre malade."""
-	arbres_sains = [
-		(ligne, colonne)
-		for ligne in range(len(damier))
-		for colonne in range(len(damier[ligne]))
-		if damier[ligne][colonne] == ARBRE_SAIN
-	]
+def ajouter_decors(damier: list[list[int]], nombre_rochers: int = 8) -> None:
+	"""Ajoute une riviere continue et des rochers sur les cases vides."""
+	taille = len(damier)
+	colonne_riviere = taille // 2
 
-	if arbres_sains:
-		ligne, colonne = random.choice(arbres_sains)
-		damier[ligne][colonne] = ARBRE_MALADE
+	for ligne in range(taille):
+		for colonne in range(max(0, colonne_riviere - 1), min(taille, colonne_riviere + 2)):
+			damier[ligne][colonne] = RIVIERE
+
+	cases_vides = [
+		(ligne, colonne)
+		for ligne in range(taille)
+		for colonne in range(len(damier[ligne]))
+		if damier[ligne][colonne] == CASE_VIDE
+	]
+	for ligne, colonne in random.sample(cases_vides, min(nombre_rochers, len(cases_vides))):
+		damier[ligne][colonne] = ROCHER
 
 
 def propager_maladie(damier: list[list[int]]) -> list[list[int]]:
@@ -57,7 +64,7 @@ def propager_maladie(damier: list[list[int]]) -> list[list[int]]:
 			]
 
 			for ligne_voisine, colonne_voisine in voisins:
-				if 0 <= ligne_voisine < len(damier) and 0 <= colonne_voisine < len(damier[ligne]):
+				if 0 <= ligne_voisine < len(damier) and 0 <= colonne_voisine < len(damier[ligne_voisine]):
 					if damier[ligne_voisine][colonne_voisine] == ARBRE_SAIN:
 						nouveau_damier[ligne_voisine][colonne_voisine] = ARBRE_MALADE
 
@@ -70,6 +77,8 @@ def afficher_damier(damier: list[list[int]]) -> None:
 		CASE_VIDE: ".",
 		ARBRE_SAIN: "#",
 		ARBRE_MALADE: "X",
+		RIVIERE: "~",
+		ROCHER: "O",
 	}
 
 	for ligne in damier:
@@ -83,13 +92,15 @@ class ApplicationForet:
 		CASE_VIDE: "white",
 		ARBRE_SAIN: "forest green",
 		ARBRE_MALADE: "firebrick",
+		RIVIERE: "#5dade2",
+		ROCHER: "#7f8c8d",
 	}
 
 	def __init__(self, fenetre: tk.Tk) -> None:
 		self.fenetre = fenetre
 		self.fenetre.title("Propagation d'une maladie dans une foret")
 		self.damier = creer_damier(TAILLE, DENSITE_ARBRES)
-		placer_arbre_malade(self.damier)
+		ajouter_decors(self.damier)
 		self.etape = 0
 		self.cases: list[list[tk.Button]] = []
 
@@ -124,7 +135,7 @@ class ApplicationForet:
 
 		self.information = tk.Label(
 			fenetre,
-			text="Clique sur un arbre sain pour le rendre malade.",
+			text="Clique sur un arbre sain pour placer la contamination, puis avance etape par etape.",
 			font=("Arial", 10),
 		)
 		self.information.pack(pady=(0, 12))
@@ -165,7 +176,7 @@ class ApplicationForet:
 
 	def recommencer(self) -> None:
 		self.damier = creer_damier(TAILLE, DENSITE_ARBRES)
-		placer_arbre_malade(self.damier)
+		ajouter_decors(self.damier)
 		self.etape = 0
 		self.titre.configure(text="Etape 0")
 		self.actualiser_grille()
