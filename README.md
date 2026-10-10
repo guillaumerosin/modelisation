@@ -14,10 +14,17 @@ Le champignon choisi est fictif, mais il est inspiré de l'armillaire (`Armillar
 - La simulation commence sur un sol nu : les 144 cases sont vides au départ,
   sans arbres, rochers ni rivière.
 - La grille de 12 × 12 cases est divisée en quatre quadrants :
-  - **Forêt humide** : humidité et fertilité élevées, régénération importante.
-  - **Milieu sec** : la faible humidité est un facteur limitant et augmente la mortalité.
-  - **Montagne** : croissance lente et pression de maladie faible.
-  - **Zone anthropisée** : fertilité faible, mortalité et pression de maladie plus fortes.
+  - **Forêt humide** : sol humifère et hydrométrie élevée.
+  - **Milieu sec** : sol sableux et hydrométrie faible, facteur limitant.
+  - **Montagne** : sol caillouteux et hydrométrie moyenne.
+  - **Zone anthropisée** : sol argilo-calcaire et hydrométrie perturbée.
+- Quatre espèces peuvent apparaître selon leurs préférences :
+  - **Chêne** : sols argilo-calcaires ou limoneux, besoin en eau moyen ;
+  - **Hêtre** : sols limoneux ou humifères, préfère les milieux humides ;
+  - **Pin** : sols sableux ou caillouteux, résiste aux milieux secs ;
+  - **Saule** : sols alluviaux ou humifères, très forte préférence pour l’humidité.
+- La probabilité d'apparition d'une espèce dépend de l'adéquation entre son
+  hydrométrie idéale et celle de la zone, ainsi que du type de sol.
 - À chaque étape, les zones appliquent leurs propres probabilités de
   régénération. Les premiers arbres apparaissent donc progressivement, ce qui
   représente une succession écologique sur un sol nu.
@@ -38,8 +45,8 @@ facteurs abiotiques (climat, humidité, sol), interactions biotiques
 
 ## Légende
 
-- Vert : arbre sain
-- Rouge : arbre contaminé
+- C : chêne, H : hêtre, P : pin, S : saule
+- Rouge : arbre contaminé (l'espèce reste indiquée)
 - Gris clair : arbre mort
 - Blanc ou couleur pâle : case vide (la couleur indique sa zone)
 

@@ -20,6 +20,30 @@ ARBRE_MALADE = 2
 RIVIERE = 3
 ROCHER = 4
 ARBRE_MORT = 5
+ESPECE_GENERIC = 1
+CHENE = 10
+HETRE = 11
+PIN = 12
+SAULE = 13
+MALADIE_BASE = 20
+
+
+@dataclass(frozen=True)
+class Espece:
+    nom: str
+    symbole: str
+    couleur: str
+    hydrometrie_ideale: float
+    sols_favorables: tuple[str, ...]
+
+
+ESPECES = (
+    Espece("Chêne", "C", "#176b2c", .55, ("argilo-calcaire", "limoneux")),
+    Espece("Hêtre", "H", "#228b22", .75, ("limoneux", "humifère")),
+    Espece("Pin", "P", "#356859", .25, ("sableux", "caillouteux")),
+    Espece("Saule", "S", "#149c88", .95, ("alluvial", "humifère")),
+)
+ESPECES_PAR_CODE = {CHENE: ESPECES[0], HETRE: ESPECES[1], PIN: ESPECES[2], SAULE: ESPECES[3]}
 
 
 @dataclass(frozen=True)
@@ -34,13 +58,15 @@ class ContexteEcologique:
     couleur_zone: str
     lumiere: float = 1.0
     competition: float = 0.04
+    type_sol: str = "limoneux"
+    hydrometrie: float = .5
 
 
 ZONES = (
-    ContexteEcologique("Forêt humide", "Humidité élevée et sol fertile", .90, .85, .30, .03, .22, "#d5f5e3", .80, .03),
-    ContexteEcologique("Milieu sec", "Faible pluie : facteur limitant", .25, .45, .10, .18, .06, "#fdebd0", 1.00, .07),
-    ContexteEcologique("Montagne", "Froid, relief et croissance lente", .45, .55, .08, .11, .08, "#d6eaf8", .45, .05),
-    ContexteEcologique("Zone anthropisée", "Fragmentation et perturbations humaines", .50, .35, .24, .14, .04, "#f5eef8", .70, .10),
+    ContexteEcologique("Forêt humide", "Sol humifère, très humide", .90, .85, .30, .03, .22, "#d5f5e3", .80, .03, "humifère", .90),
+    ContexteEcologique("Milieu sec", "Sol sableux, hydrométrie faible", .25, .45, .10, .18, .06, "#fdebd0", 1.00, .07, "sableux", .20),
+    ContexteEcologique("Montagne", "Sol caillouteux, hydrométrie moyenne", .45, .55, .08, .11, .08, "#d6eaf8", .45, .05, "caillouteux", .40),
+    ContexteEcologique("Zone anthropisée", "Sol argilo-calcaire perturbé", .50, .35, .24, .14, .04, "#f5eef8", .70, .10, "argilo-calcaire", .55),
 )
 
 
@@ -50,8 +76,35 @@ def zone_de_case(ligne: int, colonne: int, taille: int) -> int:
     return (0 if ligne < milieu else 2) + (0 if colonne < milieu else 1)
 
 
+def est_arbre_sain(etat: int) -> bool:
+    return etat == ARBRE_SAIN or etat in ESPECES_PAR_CODE
+
+
+def est_arbre_malade(etat: int) -> bool:
+    return etat == ARBRE_MALADE or MALADIE_BASE <= etat < MALADIE_BASE + 10
+
+
+def code_espece_malade(code_espece: int) -> int:
+    return MALADIE_BASE + (code_espece - CHENE)
+
+
+def espece_de(etat: int) -> Espece:
+    code = etat if etat in ESPECES_PAR_CODE else CHENE
+    return ESPECES_PAR_CODE[code]
+
+
+def choisir_espece(zone: ContexteEcologique) -> int:
+    """Sélectionne une espèce selon l'hydrométrie et le type de sol local."""
+    poids = []
+    for code, espece in ESPECES_PAR_CODE.items():
+        adequation_eau = max(0.05, 1 - abs(zone.hydrometrie - espece.hydrometrie_ideale))
+        adequation_sol = 1.8 if zone.type_sol in espece.sols_favorables else .25
+        poids.append(adequation_eau * adequation_sol)
+    return random.choices(list(ESPECES_PAR_CODE), weights=poids, k=1)[0]
+
+
 def creer_damier(taille: int, densite: float) -> list[list[int]]:
-    """Crée un damier avec des arbres répartis aléatoirement."""
+    """Crée le damier initial, vide lorsque densite vaut zéro."""
     return [
         [ARBRE_SAIN if random.random() < densite else CASE_VIDE for _ in range(taille)]
         for _ in range(taille)
@@ -85,9 +138,14 @@ def propager_maladie(
     taille = len(damier)
     for ligne in range(taille):
         for colonne in range(len(damier[ligne])):
-            if damier[ligne][colonne] != ARBRE_MALADE:
+            if not est_arbre_malade(damier[ligne][colonne]):
                 continue
             zone = contexts[zone_de_case(ligne, colonne, taille)]
+            espece_malade = (
+                damier[ligne][colonne] - MALADIE_BASE + CHENE
+                if damier[ligne][colonne] >= MALADIE_BASE
+                else CHENE
+            )
             for dl, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
                 lv, cv = ligne + dl, colonne + dc
                 if not (0 <= lv < taille and 0 <= cv < len(damier[lv])):
@@ -95,8 +153,8 @@ def propager_maladie(
                 # La fragmentation crée quatre populations distinctes dans le modèle.
                 if zone_de_case(lv, cv, taille) != zone_de_case(ligne, colonne, taille):
                     continue
-                if damier[lv][cv] == ARBRE_SAIN and random.random() < zone.pression_maladie:
-                    nouveau[lv][cv] = ARBRE_MALADE
+                if est_arbre_sain(damier[lv][cv]) and random.random() < zone.pression_maladie:
+                    nouveau[lv][cv] = code_espece_malade(espece_malade)
     return nouveau
 
 
@@ -116,17 +174,18 @@ def faire_evoluer_population(
             voisins_arbres = sum(
                 0 <= ligne + dl < taille
                 and 0 <= colonne + dc < len(damier[ligne + dl])
-                and damier[ligne + dl][colonne + dc] in (ARBRE_SAIN, ARBRE_MALADE)
+                and (est_arbre_sain(damier[ligne + dl][colonne + dc])
+                     or est_arbre_malade(damier[ligne + dl][colonne + dc]))
                 for dl, dc in ((-1, 0), (1, 0), (0, -1), (0, 1))
             )
             pression_competition = max(0, voisins_arbres - 2) * zone.competition
             mortalite = min(.95, zone.mortalite + pression_competition)
-            if etat == ARBRE_MALADE and random.random() < mortalite + .08:
+            if est_arbre_malade(etat) and random.random() < mortalite + .08:
                 nouveau[ligne][colonne] = ARBRE_MORT
-            elif etat == ARBRE_SAIN and random.random() < mortalite:
+            elif est_arbre_sain(etat) and random.random() < mortalite:
                 nouveau[ligne][colonne] = ARBRE_MORT
             elif etat in (CASE_VIDE, ARBRE_MORT) and random.random() < zone.regeneration * zone.fertilite * zone.lumiere:
-                nouveau[ligne][colonne] = ARBRE_SAIN
+                nouveau[ligne][colonne] = choisir_espece(zone)
     return nouveau
 
 
@@ -141,7 +200,7 @@ def etape_ecologique(
 def afficher_damier(damier: list[list[int]]) -> None:
     symboles = {CASE_VIDE: ".", ARBRE_SAIN: "#", ARBRE_MALADE: "X", RIVIERE: "~", ROCHER: "O", ARBRE_MORT: " "}
     for ligne in damier:
-        print(" ".join(symboles[case] for case in ligne))
+        print(" ".join(ESPECES_PAR_CODE[case].symbole if case in ESPECES_PAR_CODE else symboles.get(case, "x") for case in ligne))
 
 
 class ApplicationForet:
@@ -192,7 +251,7 @@ class ApplicationForet:
             texte = (
                 f"{index + 1}. {zone.nom}\n"
                 f"{zone.description} | humidité {zone.humidite:.0%} | "
-                f"fertilité {zone.fertilite:.0%}"
+                f"hydrométrie {zone.hydrometrie:.0%} | sol {zone.type_sol}"
             )
             tk.Label(cadre, text=texte, anchor="w", justify=tk.LEFT, bg=zone.couleur_zone).grid(
                 row=index // 2, column=index % 2, padx=4, pady=2, sticky="ew"
@@ -201,7 +260,7 @@ class ApplicationForet:
         cadre.columnconfigure(1, weight=1)
         tk.Label(
             parent,
-            text="● sain   ✖ malade   † mort   ≈ rivière   ◆ rocher",
+            text="C chêne   H hêtre   P pin   S saule   × malade   † mort",
             font=("Arial", 9),
         ).pack(pady=(0, 5))
 
@@ -221,20 +280,23 @@ class ApplicationForet:
             for colonne in range(TAILLE):
                 etat = self.damier[ligne][colonne]
                 zone = zone_de_case(ligne, colonne, TAILLE)
-                if etat == ARBRE_SAIN:
+                if est_arbre_sain(etat):
                     compteurs[zone][0] += 1
-                elif etat == ARBRE_MALADE:
+                elif est_arbre_malade(etat):
                     compteurs[zone][1] += 1
                 elif etat == ARBRE_MORT:
                     compteurs[zone][2] += 1
-                couleur = self.COULEURS[etat]
+                couleur = ESPECES_PAR_CODE[etat].couleur if etat in ESPECES_PAR_CODE else self.COULEURS.get(etat, "#8b0000")
                 if etat == CASE_VIDE:
                     couleur = ZONES[zone].couleur_zone
+                symbole = ESPECES_PAR_CODE[etat].symbole if etat in ESPECES_PAR_CODE else self.SYMBOLES[etat]
+                if est_arbre_malade(etat):
+                    symbole = f"×{espece_de(etat).symbole}"
                 relief = tk.GROOVE
                 if ligne in (TAILLE // 2 - 1, TAILLE // 2) or colonne in (TAILLE // 2 - 1, TAILLE // 2):
                     relief = tk.SOLID
                 self.cases[ligne][colonne].configure(
-                    text=self.SYMBOLES[etat],
+                    text=symbole,
                     fg="black" if etat in (CASE_VIDE, ARBRE_MORT, RIVIERE, ROCHER) else "white",
                     bg=couleur,
                     activebackground=couleur,
@@ -247,8 +309,9 @@ class ApplicationForet:
         self.information.configure(text=resume)
 
     def cliquer_case(self, ligne: int, colonne: int) -> None:
-        if self.damier[ligne][colonne] == ARBRE_SAIN:
-            self.damier[ligne][colonne] = ARBRE_MALADE
+        if est_arbre_sain(self.damier[ligne][colonne]):
+            code = self.damier[ligne][colonne] if self.damier[ligne][colonne] in ESPECES_PAR_CODE else CHENE
+            self.damier[ligne][colonne] = code_espece_malade(code)
             self.actualiser_grille()
 
     def etape_suivante(self) -> None:
